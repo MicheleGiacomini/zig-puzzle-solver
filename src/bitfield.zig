@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const BitfieldErr = error{ InconsistentLineLength, UnexpectedCharacter };
+const BitfieldErr = error{ InconsistentLineLength, UnexpectedCharacter, FromatError };
 
 const Bitfield = struct {
     width: usize,
@@ -25,7 +25,7 @@ const Bitfield = struct {
         allocator.free(self.data);
     }
 
-    const FromStringConfig = struct {
+    pub const FromStringConfig = struct {
         char0: u8 = '0',
         char1: u8 = '1',
     };
@@ -77,6 +77,53 @@ const Bitfield = struct {
             .height = height,
             .data = try tmp.toOwnedSlice(allocator),
         };
+    }
+
+    const Format = struct {
+        char0: u8 = '0',
+        char1: u8 = '1',
+        bf: *const Bitfield,
+
+        pub fn format(self: Format, writer: anytype) !void {
+            var line_position: usize = 0;
+            var height_position: usize = 0;
+            const leftmost_bit: Elem = 1 << @intCast(elem_bit_width - 1);
+            outer: for (self.bf.data) |current| {
+                var elem = current;
+                var index: usize = 0;
+                while (index < elem_bit_width) : (index += 1) {
+                    if (line_position == self.bf.width) {
+                        height_position += 1;
+                        if (height_position == self.bf.height) {
+                            break :outer;
+                        }
+                        try writer.print("{s}", .{"\n"});
+                        line_position = 0;
+                    }
+                    const next_char =
+                        if (elem & leftmost_bit > 0) self.char1 else self.char0;
+                    try writer.print("{c}", .{next_char});
+                    elem = elem << 1;
+                    line_position += 1;
+                }
+            }
+        }
+    };
+
+    pub fn formatCustom(self: Bitfield, char0: u8, char1: u8) Format {
+        return Format{
+            .char0 = char0,
+            .char1 = char1,
+            .bf = &self,
+        };
+    }
+
+    pub fn format(
+        self: Bitfield,
+        writer: anytype,
+    ) !void {
+        const f = Format{ .bf = &self };
+        return f.format(writer);
     }
 };
 
@@ -135,4 +182,62 @@ test "From string wider" {
     try std.testing.expectEqualSlices(Bitfield.Elem, &data, b.data);
     try std.testing.expectEqual(66, b.width);
     try std.testing.expectEqual(3, b.height);
+}
+
+test "From string - toString simple" {
+    const s =
+        \\010
+        \\001
+        \\100
+    ;
+
+    const allocator = std.testing.allocator;
+    const b = try Bitfield.initFromString(allocator, s, .{});
+    defer b.deinit(allocator);
+    const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b});
+    defer allocator.free(to_s);
+    try std.testing.expectEqualStrings(s, to_s);
+}
+
+test "From string - toString 64 wide" {
+    const s =
+        \\0100000000000000000000000000000000000000000000000000000000000000
+        \\0010000000000000000000000000000000000000000000000000000000000000
+        \\1000000000000000000000000000000000000000000000000000000000000000
+    ;
+    const allocator = std.testing.allocator;
+    const b = try Bitfield.initFromString(allocator, s, .{});
+    defer b.deinit(allocator);
+    const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b});
+    defer allocator.free(to_s);
+    try std.testing.expectEqualStrings(s, to_s);
+}
+
+test "From string - toString wider" {
+    const s =
+        \\010000000000000000000000000000000000000000000000000000000000000000
+        \\001000000000000000000000000000000000000000000000000000000000000000
+        \\100000000000000000000000000000000000000000000000000000000000000000
+    ;
+    const allocator = std.testing.allocator;
+    const b = try Bitfield.initFromString(allocator, s, .{});
+    defer b.deinit(allocator);
+    const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b});
+    defer allocator.free(to_s);
+    try std.testing.expectEqualStrings(s, to_s);
+}
+
+test "From string - toString custom" {
+    const s =
+        \\ # 
+        \\  #
+        \\#  
+    ;
+
+    const allocator = std.testing.allocator;
+    const b = try Bitfield.initFromString(allocator, s, .{ .char0 = ' ', .char1 = '#' });
+    defer b.deinit(allocator);
+    const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b.formatCustom(' ', '#')});
+    defer allocator.free(to_s);
+    try std.testing.expectEqualStrings(s, to_s);
 }
