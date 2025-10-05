@@ -122,7 +122,7 @@ const Board = struct {
     }
 
     fn iterateAndApply(self: *Board, piece: *const Piece, x: usize, y: usize, action: *const fn (u64, u64) u64) void {
-        iterateCheckAndApply(self, piece, x, y, ?*const u8, null, action) catch unreachable;
+        iterateCheckAndApply(self, piece, x, y, void, null, action) catch unreachable;
     }
 
     /// Takes a smaller bitfield and inserts it at offset in self. Returns an error if self & other has any "on" bit.
@@ -162,7 +162,7 @@ test "Insert piece no collision" {
         \\0000000000
     ;
     const allocator = std.testing.allocator;
-    const piece = try Piece.initFromString(allocator, s, .{});
+    var piece = try Piece.initFromString(allocator, s, .{});
     defer piece.deinit(allocator);
     var board = try Board.init(allocator, 10, 10);
     defer board.deinit(allocator);
@@ -191,7 +191,7 @@ test "Insert piece no collision across element boundaries" {
         \\0000000000
     ;
     const allocator = std.testing.allocator;
-    const piece = try Piece.initFromString(allocator, s, .{});
+    var piece = try Piece.initFromString(allocator, s, .{});
     defer piece.deinit(allocator);
     var board = try Board.init(allocator, 10, 10);
     defer board.deinit(allocator);

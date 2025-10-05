@@ -137,7 +137,7 @@ test "From string simple" {
     const data = [_]Bitfield.Elem{0b0100011000000000000000000000000000000000000000000000000000000000};
 
     const allocator = std.testing.allocator;
-    const b = try Bitfield.initFromString(allocator, s, .{});
+    var b = try Bitfield.initFromString(allocator, s, .{});
     defer b.deinit(allocator);
     try std.testing.expectEqualSlices(Bitfield.Elem, &data, b.data);
     try std.testing.expectEqual(3, b.width);
@@ -157,7 +157,7 @@ test "From string 64 wide" {
     };
 
     const allocator = std.testing.allocator;
-    const b = try Bitfield.initFromString(allocator, s, .{});
+    var b = try Bitfield.initFromString(allocator, s, .{});
     defer b.deinit(allocator);
     try std.testing.expectEqualSlices(Bitfield.Elem, &data, b.data);
     try std.testing.expectEqual(64, b.width);
@@ -178,7 +178,7 @@ test "From string wider" {
     };
 
     const allocator = std.testing.allocator;
-    const b = try Bitfield.initFromString(allocator, s, .{});
+    var b = try Bitfield.initFromString(allocator, s, .{});
     defer b.deinit(allocator);
     try std.testing.expectEqualSlices(Bitfield.Elem, &data, b.data);
     try std.testing.expectEqual(66, b.width);
@@ -193,7 +193,7 @@ test "From string - toString simple" {
     ;
 
     const allocator = std.testing.allocator;
-    const b = try Bitfield.initFromString(allocator, s, .{});
+    var b = try Bitfield.initFromString(allocator, s, .{});
     defer b.deinit(allocator);
     const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b});
     defer allocator.free(to_s);
@@ -207,7 +207,7 @@ test "From string - toString 64 wide" {
         \\1000000000000000000000000000000000000000000000000000000000000000
     ;
     const allocator = std.testing.allocator;
-    const b = try Bitfield.initFromString(allocator, s, .{});
+    var b = try Bitfield.initFromString(allocator, s, .{});
     defer b.deinit(allocator);
     const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b});
     defer allocator.free(to_s);
@@ -221,7 +221,7 @@ test "From string - toString wider" {
         \\100000000000000000000000000000000000000000000000000000000000000000
     ;
     const allocator = std.testing.allocator;
-    const b = try Bitfield.initFromString(allocator, s, .{});
+    var b = try Bitfield.initFromString(allocator, s, .{});
     defer b.deinit(allocator);
     const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b});
     defer allocator.free(to_s);
@@ -236,7 +236,7 @@ test "From string - toString custom" {
     ;
 
     const allocator = std.testing.allocator;
-    const b = try Bitfield.initFromString(allocator, s, .{ .char0 = ' ', .char1 = '#' });
+    var b = try Bitfield.initFromString(allocator, s, .{ .char0 = ' ', .char1 = '#' });
     defer b.deinit(allocator);
     const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b.formatCustom(' ', '#')});
     defer allocator.free(to_s);
