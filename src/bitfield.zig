@@ -183,6 +183,113 @@ pub const Bitfield = struct {
             self.data[index] = self.data[index] & ~mask;
         }
     }
+
+    pub const IndexOffset = struct {
+        index: usize,
+        offset: usize,
+    };
+
+    pub const XY = struct {
+        x: usize,
+        y: usize,
+    };
+
+    pub fn indexOffsetFromTotalOffset(total_offset: usize) IndexOffset {
+        const index = @divTrunc(total_offset, elem_bit_width);
+        const offset = @mod(total_offset, elem_bit_width);
+        return IndexOffset{
+            .index = index,
+            .offset = offset,
+        };
+    }
+
+    pub fn indexOffsetFromXY(self: *const Bitfield, x: usize, y: usize) IndexOffset {
+        const total_offset = y * self.width + x;
+        return self.indexOffsetFromTotalOffset(total_offset);
+    }
+
+    pub fn xyFromIndexOffset(self: *const Bitfield, index: usize, offset: usize) XY {
+        const totalOffset = offset + index * elem_bit_width;
+        const y = @divTrunc(totalOffset, self.width);
+        const x = @mod(totalOffset, self.width);
+        return XY{
+            .x = x,
+            .y = y,
+        };
+    }
+
+    pub fn totalOffsetFromXY(self: *const Bitfield, x: usize, y: usize) usize {
+        return y * self.width + x;
+    }
+
+    pub const Filler = struct {
+        start_index: usize,
+        current_index: usize,
+        bf: *Bitfield,
+        buf: Elem = 0,
+
+        fn writeBuf(self: *Filler) void {
+            var bf = self.bf;
+            const indOff = Bitfield.indexOffsetFromTotalOffset(self.current_index);
+            const indOffStart = Bitfield.indexOffsetFromTotalOffset(self.start_index);
+            const mask_end = max_elem << @intCast(elem_bit_width - indOff.offset - 1);
+            const mask_start = switch (indOff.index - indOffStart.index) {
+                0 => max_elem >> @intCast(indOffStart.offset),
+                else => max_elem,
+            };
+            const mask = mask_start & mask_end;
+            bf.data[indOff.index] = bf.data[indOff.index] & mask | (self.buf << @intCast(elem_bit_width - indOff.offset - 1));
+        }
+
+        pub fn isIndexAfterEnd(self: *Filler, index: usize) bool {
+            return index >= self.bf.*.width * self.bf.*.height;
+        }
+
+        pub fn reachedEnd(self: *Filler) bool {
+            return isIndexAfterEnd(self, self.current_index);
+        }
+
+        pub fn flush(self: *Filler) void {
+            const indOff = Bitfield.indexOffsetFromTotalOffset(self.current_index);
+            if (indOff.offset == 0) {
+                return;
+            }
+            self.current_index -= 1;
+            self.writeBuf();
+            self.current_index += 1;
+        }
+
+        pub fn write(self: *Filler, val: bool) void {
+            if (self.reachedEnd()) {
+                return;
+            }
+
+            const indOff = Bitfield.indexOffsetFromTotalOffset(self.current_index);
+            self.buf = self.buf << 1;
+            if (val) {
+                self.buf = self.buf | 1;
+            }
+
+            if (indOff.offset == elem_bit_width - 1 or self.isIndexAfterEnd(self.current_index + 1)) {
+                self.writeBuf();
+                self.buf = 0;
+            }
+            self.current_index += 1;
+        }
+    };
+
+    pub fn filler(self: *Bitfield, x_start: usize, y_start: usize) Filler {
+        const idx = self.totalOffsetFromXY(x_start, y_start);
+        return Filler{
+            .bf = self,
+            .start_index = idx,
+            .current_index = idx,
+        };
+    }
+
+    // pub fn trim(self: *const Bitfield, allocator: std.mem.Allocator, rows_start: usize, rows_end: usize, cols_start: usize, cols_end: usize) Bitfield {
+    //     var b = Bitfield.init(allocator, self.width - cols_start - cols_end, self.height - rows_start - rows_end);
+    // }
 };
 
 test "From string simple" {
@@ -389,4 +496,51 @@ test "simple unset" {
     const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b});
     defer allocator.free(to_s);
     try std.testing.expectEqualStrings(exp, to_s);
+}
+
+test "Filler" {
+    const s_0 =
+        \\000
+        \\000
+        \\000
+    ;
+
+    const s_1 =
+        \\000
+        \\001
+        \\100
+    ;
+
+    const s_2 =
+        \\000
+        \\001
+        \\101
+    ;
+    const allocator = std.testing.allocator;
+    var b = try Bitfield.init(allocator, 3, 3);
+    defer b.deinit(allocator);
+
+    var filler = b.filler(2, 1);
+    filler.write(true);
+    filler.write(true);
+
+    // try std.testing.expect(!filler.reachedEnd());
+    const to_s_0 = try std.fmt.allocPrint(allocator, "{f}", .{b});
+    defer allocator.free(to_s_0);
+    try std.testing.expectEqualStrings(s_0, to_s_0);
+
+    filler.flush();
+
+    // try std.testing.expect(!filler.reachedEnd());
+    const to_s_1 = try std.fmt.allocPrint(allocator, "{f}", .{b});
+    defer allocator.free(to_s_1);
+    try std.testing.expectEqualStrings(s_1, to_s_1);
+
+    filler.write(false);
+    filler.write(true);
+
+    // try std.testing.expect(filler.reachedEnd());
+    const to_s_2 = try std.fmt.allocPrint(allocator, "{f}", .{b});
+    defer allocator.free(to_s_2);
+    try std.testing.expectEqualStrings(s_2, to_s_2);
 }
