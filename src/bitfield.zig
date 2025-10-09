@@ -319,6 +319,7 @@ pub const Bitfield = struct {
         return b;
     }
 
+    /// Trim all completely empty rows and columns from the perimeter of the bitfield
     pub fn trimWhiteSpace(self: *const Bitfield, allocator: std.mem.Allocator) !Bitfield {
         var foundFirstNonEmptyRow = false;
         var lastNonEmptyRow: usize = 0;
