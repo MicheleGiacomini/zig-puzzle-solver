@@ -1,7 +1,8 @@
 const std = @import("std");
 
-pub const BitfieldErr = error{ InconsistentLineLength, UnexpectedCharacter, FromatError, InsertCollision, RemoveMismatch };
+pub const BitfieldErr = error{ InconsistentLineLength, UnexpectedCharacter, TrimTooLarge };
 
+/// Represent a rectangular matrix of boolean values
 pub const Bitfield = struct {
     width: usize,
     height: usize,
@@ -111,6 +112,7 @@ pub const Bitfield = struct {
         }
     };
 
+    /// Call like this: `const to_s = try std.fmt.allocPrint(allocator, "{f}", .{b.formatCustom(' ', '#')});`
     pub fn formatCustom(self: *const Bitfield, char0: u8, char1: u8) std.fmt.Alt(F, F.format) {
         return .{ .data = .{
             .char0 = char0,
@@ -133,13 +135,13 @@ pub const Bitfield = struct {
         val: bool,
     };
 
-    const ItemIter = struct {
+    const BitReader = struct {
         current: Elem,
         offset: usize,
         index: usize,
         bf: *const Bitfield,
 
-        pub fn next(self: *ItemIter) ?Item {
+        pub fn next(self: *BitReader) ?Item {
             if (self.offset == elem_bit_width) {
                 self.offset = 0;
                 self.index += 1;
@@ -162,8 +164,10 @@ pub const Bitfield = struct {
         }
     };
 
-    pub fn itemIterator(self: *const Bitfield) ItemIter {
-        return ItemIter{
+    /// Return an iterator that returns one bit at a time together with the x(col) and y(row) coordinates.
+    /// Call `next()` to advance.
+    pub fn bitReader(self: *const Bitfield) BitReader {
+        return BitReader{
             .current = self.data[0],
             .offset = 0,
             .index = 0,
@@ -171,6 +175,7 @@ pub const Bitfield = struct {
         };
     }
 
+    /// Set a single bit to a given value
     pub fn set(self: *Bitfield, x: usize, y: usize, val: bool) void {
         const total_offset = y * self.width + x;
         const index = @divTrunc(total_offset, elem_bit_width);
@@ -222,13 +227,13 @@ pub const Bitfield = struct {
         return y * self.width + x;
     }
 
-    pub const Filler = struct {
+    pub const BitWriter = struct {
         start_index: usize,
         current_index: usize,
         bf: *Bitfield,
         buf: Elem = 0,
 
-        fn writeBuf(self: *Filler) void {
+        fn writeBuf(self: *BitWriter) void {
             var bf = self.bf;
             const indOff = Bitfield.indexOffsetFromTotalOffset(self.current_index);
             const indOffStart = Bitfield.indexOffsetFromTotalOffset(self.start_index);
@@ -241,15 +246,15 @@ pub const Bitfield = struct {
             bf.data[indOff.index] = bf.data[indOff.index] & mask | (self.buf << @intCast(elem_bit_width - indOff.offset - 1));
         }
 
-        pub fn isIndexAfterEnd(self: *Filler, index: usize) bool {
+        fn isIndexAfterEnd(self: *BitWriter, index: usize) bool {
             return index >= self.bf.*.width * self.bf.*.height;
         }
 
-        pub fn reachedEnd(self: *Filler) bool {
+        pub fn reachedEnd(self: *BitWriter) bool {
             return isIndexAfterEnd(self, self.current_index);
         }
 
-        pub fn flush(self: *Filler) void {
+        pub fn flush(self: *BitWriter) void {
             const indOff = Bitfield.indexOffsetFromTotalOffset(self.current_index);
             if (indOff.offset == 0) {
                 return;
@@ -259,7 +264,7 @@ pub const Bitfield = struct {
             self.current_index += 1;
         }
 
-        pub fn write(self: *Filler, val: bool) void {
+        pub fn write(self: *BitWriter, val: bool) void {
             if (self.reachedEnd()) {
                 return;
             }
@@ -278,18 +283,97 @@ pub const Bitfield = struct {
         }
     };
 
-    pub fn filler(self: *Bitfield, x_start: usize, y_start: usize) Filler {
+    /// Returns a buffered writer that writes one bit at a time and advances starting from x(col) x_start and y(row) y_start.
+    /// Available methods are:
+    ///     - `write(bool) void` to write a single value and advance
+    ///     - `flush() void` to flush the current buffer, data is automatically flushed when writing to the rightmost bit of an element
+    ///     - `reachedEnd() bool` turns `true` after writing the last (width-1, height-1) bit of the bitfield.
+    pub fn bitWriter(self: *Bitfield, x_start: usize, y_start: usize) BitWriter {
         const idx = self.totalOffsetFromXY(x_start, y_start);
-        return Filler{
+        return BitWriter{
             .bf = self,
             .start_index = idx,
             .current_index = idx,
         };
     }
 
-    // pub fn trim(self: *const Bitfield, allocator: std.mem.Allocator, rows_start: usize, rows_end: usize, cols_start: usize, cols_end: usize) Bitfield {
-    //     var b = Bitfield.init(allocator, self.width - cols_start - cols_end, self.height - rows_start - rows_end);
-    // }
+    /// Trim a given number of rows and columns from the bitfield.
+    /// Returns `TrimTooLarge` when trying to remove more rows or columns than available.
+    pub fn trim(self: *const Bitfield, allocator: std.mem.Allocator, rows_start: usize, rows_end: usize, cols_start: usize, cols_end: usize) !Bitfield {
+        if (rows_start + rows_end > self.height or cols_start + cols_end > self.width) {
+            return BitfieldErr.TrimTooLarge;
+        }
+        var b = try Bitfield.init(allocator, self.width - cols_start - cols_end, self.height - rows_start - rows_end);
+        var readerSelf = self.bitReader();
+        var writerTarget = b.bitWriter(0, 0);
+        const x_start = cols_start;
+        const x_end = self.width - cols_end;
+        const y_start = rows_start;
+        const y_end = self.width - rows_end;
+        while (readerSelf.next()) |val| {
+            if (val.x >= x_start and val.x < x_end and val.y >= y_start and val.y < y_end) {
+                writerTarget.write(val.val);
+            }
+        }
+        writerTarget.flush();
+        return b;
+    }
+
+    pub fn trimWhiteSpace(self: *const Bitfield, allocator: std.mem.Allocator) !Bitfield {
+        var foundFirstNonEmptyRow = false;
+        var lastNonEmptyRow: usize = 0;
+        var firstNonEmptyRow = self.height - 1;
+
+        var firstNonEmptyCol = self.width - 1;
+        var lastNonEmptyCol: usize = 0;
+
+        var currentFirstNonEmptyCol = self.width - 1;
+        var currentLastNonEmptyCol: usize = 0;
+        var foundFirstNonEmptyCol = false;
+
+        var readerSelf = self.bitReader();
+        while (readerSelf.next()) |val| {
+            if (val.x == 0) {
+                currentFirstNonEmptyCol = self.width - 1;
+                currentLastNonEmptyCol = 0;
+                foundFirstNonEmptyCol = false;
+            }
+
+            if (val.val) {
+                if (!foundFirstNonEmptyRow) {
+                    foundFirstNonEmptyRow = true;
+                    firstNonEmptyRow = val.y;
+                }
+                lastNonEmptyRow = val.y;
+                if (!foundFirstNonEmptyCol) {
+                    foundFirstNonEmptyCol = true;
+                    currentFirstNonEmptyCol = val.x;
+                }
+                currentLastNonEmptyCol = val.x;
+            }
+
+            if (val.x == self.width - 1) {
+                firstNonEmptyCol = @min(firstNonEmptyCol, currentFirstNonEmptyCol);
+                lastNonEmptyCol = @max(lastNonEmptyCol, currentLastNonEmptyCol);
+            }
+        }
+        if (lastNonEmptyRow == 0) {
+            return Bitfield.init(allocator, 0, 0);
+        }
+        return self.trim(allocator, firstNonEmptyRow, self.height - lastNonEmptyRow - 1, firstNonEmptyCol, self.width - lastNonEmptyCol - 1);
+    }
+
+    /// Whether the two bitfields contain the same data.
+    pub fn equal(self: *const Bitfield, other: *const Bitfield) bool {
+        if (self.width != other.width or self.height != other.height) return false;
+        var i: usize = 0;
+        while (i < self.data.len) : (i += 1) {
+            if (self.data[i] != other.data[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 test "From string simple" {
@@ -417,7 +501,7 @@ test "Simple item iterator" {
     const allocator = std.testing.allocator;
     var b = try Bitfield.initFromString(allocator, s, .{});
     defer b.deinit(allocator);
-    var iter = b.itemIterator();
+    var iter = b.bitReader();
     var current = iter.next();
     try std.testing.expect(current.?.val == false);
     try std.testing.expect(current.?.x == 0);
@@ -520,7 +604,7 @@ test "Filler" {
     var b = try Bitfield.init(allocator, 3, 3);
     defer b.deinit(allocator);
 
-    var filler = b.filler(2, 1);
+    var filler = b.bitWriter(2, 1);
     filler.write(true);
     filler.write(true);
 
@@ -543,4 +627,102 @@ test "Filler" {
     const to_s_2 = try std.fmt.allocPrint(allocator, "{f}", .{b});
     defer allocator.free(to_s_2);
     try std.testing.expectEqualStrings(s_2, to_s_2);
+}
+
+test "Trim" {
+    const s =
+        \\00100000
+        \\00001000
+        \\00000001
+        \\00001000
+        \\00100000
+        \\01000000
+        \\01000000
+    ;
+
+    const exp =
+        \\10
+        \\00
+        \\10
+    ;
+    const allocator = std.testing.allocator;
+    var b = try Bitfield.initFromString(allocator, s, .{});
+    defer b.deinit(allocator);
+
+    var trimmed = try b.trim(allocator, 1, 3, 4, 2);
+    defer trimmed.deinit(allocator);
+
+    // try std.testing.expect(filler.reachedEnd());
+    const actual = try std.fmt.allocPrint(allocator, "{f}", .{trimmed});
+    defer allocator.free(actual);
+    try std.testing.expectEqualStrings(exp, actual);
+}
+
+test "Equality" {
+    const s1 =
+        \\100
+        \\010
+        \\001
+    ;
+    const s2 =
+        \\101
+        \\010
+        \\001
+    ;
+
+    const allocator = std.testing.allocator;
+
+    var b33 = try Bitfield.init(allocator, 3, 3);
+    defer b33.deinit(allocator);
+    var b34 = try Bitfield.init(allocator, 3, 4);
+    defer b34.deinit(allocator);
+    var b43 = try Bitfield.init(allocator, 4, 3);
+    defer b43.deinit(allocator);
+    var b10 = try Bitfield.initFromString(allocator, s1, .{});
+    defer b10.deinit(allocator);
+    var b11 = try Bitfield.initFromString(allocator, s1, .{});
+    defer b11.deinit(allocator);
+    var b2 = try Bitfield.initFromString(allocator, s2, .{});
+    defer b2.deinit(allocator);
+
+    try std.testing.expect(b33.equal(&b33));
+    try std.testing.expect(!b33.equal(&b34));
+    try std.testing.expect(!b33.equal(&b43));
+    try std.testing.expect(b10.equal(&b11));
+    try std.testing.expect(!b10.equal(&b2));
+}
+
+test "trimWhiteSpace" {
+    const s1 =
+        \\101
+        \\010
+        \\101
+    ;
+    const s2 =
+        \\000000000
+        \\000010100
+        \\000001000
+        \\000010100
+        \\000000000
+        \\000000000
+        \\000000000
+    ;
+
+    const allocator = std.testing.allocator;
+    var b1 = try Bitfield.initFromString(allocator, s1, .{});
+    defer b1.deinit(allocator);
+    var b2 = try Bitfield.initFromString(allocator, s2, .{});
+    defer b2.deinit(allocator);
+
+    var trim_b1 = try b1.trimWhiteSpace(allocator);
+    defer trim_b1.deinit(allocator);
+    var trim_b2 = try b2.trimWhiteSpace(allocator);
+    defer trim_b2.deinit(allocator);
+    const trim_s1 = try std.fmt.allocPrint(allocator, "{f}", .{trim_b1});
+    defer allocator.free(trim_s1);
+    const trim_s2 = try std.fmt.allocPrint(allocator, "{f}", .{trim_b2});
+    defer allocator.free(trim_s2);
+
+    try std.testing.expectEqualStrings(s1, trim_s1);
+    try std.testing.expectEqualStrings(s1, trim_s2);
 }
