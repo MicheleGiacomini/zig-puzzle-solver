@@ -47,7 +47,7 @@ pub const Piece = struct {
     }
 };
 
-const BoardErr = error{ InsertCollision, RemoveMismatch };
+const BoardErr = error{ InsertCollision, RemoveMismatch, WidthOverflow, HeightOverflow, WidthAndHeightOerflow };
 
 const Board = struct {
     current: bf.Bitfield,
@@ -88,8 +88,18 @@ const Board = struct {
     }
 
     fn iterateCheckAndApply(self: *Board, piece: *const Piece, x: usize, y: usize, comptime err: type, comptime check: ?*const fn (Elem, Elem) ?err, comptime action: *const fn (Elem, Elem) Elem) err!void {
-        assert(piece.height + y <= self.height);
-        assert(piece.width + x <= self.width);
+        const width_overflow = self.width < x + piece.width;
+        const height_overflow = self.height < x + piece.height;
+
+        if (width_overflow and height_overflow) {
+            return BoardErr.WidthAndHeightOerflow;
+        }
+        if (width_overflow) {
+            return BoardErr.WidthOerflow;
+        }
+        if (height_overflow) {
+            return BoardErr.HeightOerflow;
+        }
 
         var piece_elem_index: usize = 0;
         var elements_modified: usize = 0;
