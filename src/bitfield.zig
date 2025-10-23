@@ -309,7 +309,7 @@ pub const Bitfield = struct {
         const x_start = cols_start;
         const x_end = self.width - cols_end;
         const y_start = rows_start;
-        const y_end = self.width - rows_end;
+        const y_end = self.height - rows_end;
         while (readerSelf.next()) |val| {
             if (val.x >= x_start and val.x < x_end and val.y >= y_start and val.y < y_end) {
                 writerTarget.write(val.val);
