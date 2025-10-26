@@ -47,9 +47,9 @@ pub const Piece = struct {
     }
 };
 
-const BoardErr = error{ InsertCollision, RemoveMismatch, WidthOverflow, HeightOverflow, WidthAndHeightOerflow };
+pub const BoardErr = error{ InsertCollision, RemoveMismatch, WidthOverflow, HeightOverflow, WidthAndHeightOverflow };
 
-const Board = struct {
+pub const Board = struct {
     current: bf.Bitfield,
     buf: []ChangeElement,
     width: usize,
@@ -92,13 +92,13 @@ const Board = struct {
         const height_overflow = self.height < y + piece.height;
 
         if (width_overflow and height_overflow) {
-            return BoardErr.WidthAndHeightOerflow;
+            return BoardErr.WidthAndHeightOverflow;
         }
         if (width_overflow) {
-            return BoardErr.WidthOerflow;
+            return BoardErr.WidthOverflow;
         }
         if (height_overflow) {
-            return BoardErr.HeightOerflow;
+            return BoardErr.HeightOverflow;
         }
 
         var piece_elem_index: usize = 0;
