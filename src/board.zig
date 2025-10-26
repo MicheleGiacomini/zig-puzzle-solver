@@ -89,7 +89,7 @@ const Board = struct {
 
     fn iterateCheckAndApply(self: *Board, piece: *const Piece, x: usize, y: usize, comptime err: type, comptime check: ?*const fn (Elem, Elem) ?err, comptime action: *const fn (Elem, Elem) Elem) err!void {
         const width_overflow = self.width < x + piece.width;
-        const height_overflow = self.height < x + piece.height;
+        const height_overflow = self.height < y + piece.height;
 
         if (width_overflow and height_overflow) {
             return BoardErr.WidthAndHeightOerflow;
