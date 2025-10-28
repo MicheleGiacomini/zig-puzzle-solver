@@ -113,7 +113,7 @@ const State = struct {
 
 const SolverEnd = error{End};
 
-const Solver = struct {
+pub const Solver = struct {
     pieces: []PieceInstance,
     state: State,
 
@@ -128,7 +128,7 @@ const Solver = struct {
         end,
     };
 
-    fn init(allocator: std.mem.Allocator, pieces: []PieceInstance) !Solver {
+    pub fn init(allocator: std.mem.Allocator, pieces: []PieceInstance) !Solver {
         var tot_pieces_tmp: usize = 0;
         for (pieces) |piece| {
             tot_pieces_tmp += piece.mult;
@@ -217,7 +217,7 @@ const Solver = struct {
         return &self.pieces[self.state.next_index].p[self.state.next_rotation_index];
     }
 
-    fn solve(self: *Solver, allocator: std.mem.Allocator, board_width: usize, board_height: usize) ![]Solution {
+    pub fn solve(self: *Solver, allocator: std.mem.Allocator, board_width: usize, board_height: usize) ![]Solution {
         var board = try b.Board.init(allocator, board_width, board_height);
         defer board.deinit(allocator);
         var solutions = try std.ArrayList(Solution).initCapacity(allocator, 1);
