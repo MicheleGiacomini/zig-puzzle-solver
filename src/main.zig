@@ -1,27 +1,66 @@
 const std = @import("std");
 const zig_puzzle_solver = @import("zig_puzzle_solver");
+const s = @import("solver.zig");
 
 pub fn main() !void {
-    // Prints to stderr, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-    try zig_puzzle_solver.bufferedPrint();
-}
+    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    var allocator = gpa.allocator();
 
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
+    // 1. Define the piece: a 2x2 square
+    // const square_1_str =
+    //     \\1
+    // ;
+    // const square_2_str =
+    //     \\11
+    //     \\11
+    // ;
+    const square_3_str =
+        \\111
+        \\111
+        \\111
+    ;
 
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
+    const square_4_str =
+        \\1111
+        \\1111
+        \\1111
+        \\1111
+    ;
+    // const square_5_str =
+    //     \\11111
+    //     \\11111
+    //     \\11111
+    //     \\11111
+    //     \\11111
+    // ;
+    const piece_input = [_]s.PieceInput{
+        // .{ .s = square_5_str, .mult = 5 },
+        .{ .s = square_4_str, .mult = 4 },
+        .{ .s = square_3_str, .mult = 3 },
+        // .{ .s = square_2_str, .mult = 2 },
     };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
+
+    // 2. Initialize pieces
+    const pieces = try s.initPieces(allocator, &piece_input, .{});
+    defer {
+        for (pieces) |*p| {
+            p.deinit(allocator);
+        }
+        allocator.free(pieces);
+    }
+
+    // 3. Initialize solver
+    var solver = try s.Solver.init(allocator, pieces);
+    defer allocator.free(solver.state.stack);
+
+    // 4. Solve the puzzle
+    const solutions = try solver.solve(allocator, 10, 10);
+    defer {
+        for (solutions) |sol| {
+            allocator.free(sol);
+        }
+        allocator.free(solutions);
+    }
+
+    std.debug.print("\n\n{d}", .{solutions.len});
 }
