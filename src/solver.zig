@@ -280,7 +280,7 @@ const Solver = struct {
                     const backtrack_result = self.backtrack();
                     if (backtrack_result) |_| {
                         board.remove(&self.pieces[self.state.next_index].p[self.state.next_rotation_index], self.state.next_x, self.state.next_y) catch unreachable;
-                        machine_state = SolverStates.next_rotation;
+                        machine_state = SolverStates.move_forward_x;
                     } else |_| {
                         machine_state = SolverStates.end;
                     }
