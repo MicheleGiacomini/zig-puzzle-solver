@@ -393,6 +393,20 @@ test "From string simple" {
     try std.testing.expectEqual(3, b.height);
 }
 
+test "From string single bit" {
+    const s =
+        \\1
+    ;
+    const data = [_]Bitfield.Elem{0b1000000000000000000000000000000000000000000000000000000000000000};
+
+    const allocator = std.testing.allocator;
+    var b = try Bitfield.initFromString(allocator, s, .{});
+    defer b.deinit(allocator);
+    try std.testing.expectEqualSlices(Bitfield.Elem, &data, b.data);
+    try std.testing.expectEqual(1, b.width);
+    try std.testing.expectEqual(1, b.height);
+}
+
 test "From string 64 wide" {
     const s =
         \\0100000000000000000000000000000000000000000000000000000000000000
