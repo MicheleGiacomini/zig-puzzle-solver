@@ -106,6 +106,7 @@ const State = struct {
     next_index: usize,
     next_rotation_index: usize,
     n_type_placed: usize,
+    next_maybe_ok_shift: usize,
 
     next_x: usize,
     next_y: usize,
@@ -139,6 +140,7 @@ pub const Solver = struct {
             .pieces_placed = 0,
             .next_index = 0,
             .next_rotation_index = 0,
+            .next_maybe_ok_shift = 0,
             .n_type_placed = 0,
             .next_x = 0,
             .next_y = 0,
@@ -166,6 +168,7 @@ pub const Solver = struct {
     fn loadNextRotation(self: *Solver) SolverEnd!void {
         var state = &self.state;
         state.next_rotation_index += 1;
+        state.next_maybe_ok_shift = 0;
         if (state.next_rotation_index >= self.pieces[state.next_index].p.len) {
             return SolverEnd.End;
         }
@@ -183,6 +186,7 @@ pub const Solver = struct {
             state.next_x = lastPiecePlaced.x + 1;
             state.next_y = lastPiecePlaced.y;
             state.next_rotation_index = 0;
+            state.next_maybe_ok_shift = 0;
             return;
         } else {
             if (state.pieces_placed == self.tot_pieces()) {
@@ -194,6 +198,7 @@ pub const Solver = struct {
                 state.next_index += 1;
                 state.next_rotation_index = 0;
                 state.n_type_placed = 0;
+                state.next_maybe_ok_shift = 0;
                 state.next_x = 0;
                 state.next_y = 0;
             }
@@ -211,26 +216,51 @@ pub const Solver = struct {
         };
         state.pieces_placed += 1;
         state.n_type_placed += 1;
+        state.next_maybe_ok_shift = 0;
     }
 
     fn nextPiece(self: *const Solver) *b.Piece {
         return &self.pieces[self.state.next_index].p[self.state.next_rotation_index];
     }
 
-    pub fn solve(self: *Solver, allocator: std.mem.Allocator, board_width: usize, board_height: usize) ![]Solution {
+    const SolveResult = struct {
+        solutions: []Solution,
+        n_iterations: usize,
+        n_insert_tried: usize,
+        n_insert_failed: usize,
+        n_times_backtracked: usize,
+
+        pub fn format(self: *const SolveResult, writer: *std.Io.Writer) !void {
+            try writer.print("n_solutions         = {d}\n", .{self.solutions.len});
+            try writer.print("n_iterations        = {d}\n", .{self.n_iterations});
+            try writer.print("n_insert_tried      = {d}\n", .{self.n_insert_tried});
+            try writer.print("n_insert_failed     = {d}\n", .{self.n_insert_failed});
+            try writer.print("n_times_backtracked = {d}\n", .{self.n_times_backtracked});
+        }
+    };
+
+    pub fn solve(self: *Solver, allocator: std.mem.Allocator, board_width: usize, board_height: usize) !SolveResult {
         var board = try b.Board.init(allocator, board_width, board_height);
         defer board.deinit(allocator);
         var solutions = try std.ArrayList(Solution).initCapacity(allocator, 1);
         errdefer solutions.deinit(allocator);
 
+        var n_iterations: usize = 0;
+        var n_insert_tried: usize = 0;
+        var n_insert_failed: usize = 0;
+        var n_times_backtracked: usize = 0;
+
         var machine_state = SolverStates.try_placement;
         loop: while (true) {
+            n_iterations += 1;
             switch (machine_state) {
                 SolverStates.try_placement => {
-                    const result = board.insert(self.nextPiece(), self.state.next_x, self.state.next_y);
+                    const result = board.insert(self.nextPiece(), self.state.next_x, self.state.next_y, &self.state.next_maybe_ok_shift);
+                    n_insert_tried += 1;
                     if (result) |_| {
                         machine_state = SolverStates.accept_piece;
                     } else |err| {
+                        n_insert_failed += 1;
                         switch (err) {
                             b.BoardErr.InsertCollision => {
                                 machine_state = SolverStates.move_forward_x;
@@ -260,12 +290,14 @@ pub const Solver = struct {
                     machine_state = SolverStates.backtrack;
                 },
                 SolverStates.move_forward_x => {
-                    self.state.next_x += 1;
+                    self.state.next_x += @max(1, self.state.next_maybe_ok_shift);
+                    self.state.next_maybe_ok_shift = 0;
                     machine_state = SolverStates.try_placement;
                 },
                 SolverStates.move_next_row => {
                     self.state.next_x = 0;
                     self.state.next_y += 1;
+                    self.state.next_maybe_ok_shift = 0;
                     machine_state = SolverStates.try_placement;
                 },
                 SolverStates.next_rotation => {
@@ -277,6 +309,8 @@ pub const Solver = struct {
                     }
                 },
                 SolverStates.backtrack => {
+                    n_times_backtracked += 1;
+                    self.state.next_maybe_ok_shift = 0;
                     const backtrack_result = self.backtrack();
                     if (backtrack_result) |_| {
                         board.remove(&self.pieces[self.state.next_index].p[self.state.next_rotation_index], self.state.next_x, self.state.next_y) catch unreachable;
@@ -288,7 +322,13 @@ pub const Solver = struct {
                 SolverStates.end => break :loop,
             }
         }
-        return solutions.toOwnedSlice(allocator);
+        return SolveResult{
+            .solutions = try solutions.toOwnedSlice(allocator),
+            .n_iterations = n_iterations,
+            .n_insert_tried = n_insert_tried,
+            .n_insert_failed = n_insert_failed,
+            .n_times_backtracked = n_times_backtracked,
+        };
     }
 };
 

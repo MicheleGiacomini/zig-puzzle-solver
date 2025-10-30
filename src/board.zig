@@ -87,7 +87,7 @@ pub const Board = struct {
         allocator.free(self.buf);
     }
 
-    fn iterateCheckAndApply(self: *Board, piece: *const Piece, x: usize, y: usize, comptime err: type, comptime check: ?*const fn (Elem, Elem) ?err, comptime action: *const fn (Elem, Elem) Elem) err!void {
+    fn iterateCheckAndApply(self: *Board, piece: *const Piece, x: usize, y: usize, comptime err: type, comptime check: ?*const fn (Elem, Elem) ?err, comptime action: *const fn (Elem, Elem) Elem, next_check_maybe_ok: ?*usize) err!void {
         const width_overflow = self.width < x + piece.width;
         const height_overflow = self.height < y + piece.height;
 
@@ -138,6 +138,21 @@ pub const Board = struct {
                 if (check) |c| {
                     const check_result = c(board_write_to_region, board_write_bits);
                     if (check_result) |e| {
+                        if (next_check_maybe_ok) |n| {
+                            const max_shift_available = self.width -| x -| piece.width;
+                            if (max_shift_available > 0) {
+                                var s: usize = 1;
+                                shift_while: while (s <= max_shift_available) : (s += 1) {
+                                    _ = c(board_write_to_region, board_write_bits >> @intCast(s)) orelse {
+                                        n.* = s;
+                                        break :shift_while;
+                                    } catch continue;
+                                }
+                            } else {
+                                n.* = 0;
+                            }
+                        }
+
                         var i: usize = 0;
                         while (i < elements_modified) : (i += 1) {
                             const elem = self.buf[i];
@@ -165,7 +180,7 @@ pub const Board = struct {
     }
 
     /// Takes a smaller bitfield and inserts it at offset in self. Returns an error if self & other has any "on" bit.
-    pub fn insert(self: *Board, piece: *const Piece, x: usize, y: usize) BoardErr!void {
+    pub fn insert(self: *Board, piece: *const Piece, x: usize, y: usize, next_check_maybe_ok: ?*usize) BoardErr!void {
         const Local = struct {
             pub fn check(eSelf: Elem, ePiece: Elem) ?BoardErr {
                 if (eSelf & ePiece > 0) {
@@ -178,7 +193,7 @@ pub const Board = struct {
             }
         };
 
-        return iterateCheckAndApply(self, piece, x, y, BoardErr, Local.check, Local.action);
+        return iterateCheckAndApply(self, piece, x, y, BoardErr, Local.check, Local.action, next_check_maybe_ok);
     }
 
     pub fn remove(self: *Board, piece: *const Piece, x: usize, y: usize) BoardErr!void {
@@ -194,7 +209,7 @@ pub const Board = struct {
             }
         };
 
-        return iterateCheckAndApply(self, piece, x, y, BoardErr, Local.check, Local.action);
+        return iterateCheckAndApply(self, piece, x, y, BoardErr, Local.check, Local.action, null);
     }
 };
 
