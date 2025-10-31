@@ -236,7 +236,7 @@ test "Insert+remove piece no collision" {
     defer piece.deinit(allocator);
     var board = try Board.init(allocator, 10, 10);
     defer board.deinit(allocator);
-    try board.insert(&piece, 3, 3);
+    try board.insert(&piece, 3, 3, null);
     try board.remove(&piece, 3, 3);
     const actual = try std.fmt.allocPrint(allocator, "{f}", .{board.current});
     defer allocator.free(actual);
@@ -266,7 +266,7 @@ test "Insert+remove piece no collision across element boundaries" {
     defer piece.deinit(allocator);
     var board = try Board.init(allocator, 10, 10);
     defer board.deinit(allocator);
-    try board.insert(&piece, 2, 5);
+    try board.insert(&piece, 2, 5, null);
     try board.remove(&piece, 2, 5);
     const actual = try std.fmt.allocPrint(allocator, "{f}", .{board.current});
     defer allocator.free(actual);
