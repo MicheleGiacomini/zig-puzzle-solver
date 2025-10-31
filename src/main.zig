@@ -1,6 +1,5 @@
 const std = @import("std");
-const zig_puzzle_solver = @import("zig_puzzle_solver");
-const s = @import("solver.zig");
+const s = @import("zig_puzzle_solver");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
