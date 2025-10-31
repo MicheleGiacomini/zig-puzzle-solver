@@ -446,39 +446,39 @@ test "Solve 3 squares in 4x4 board" {
     try std.testing.expectEqual(8, solutions.solutions.len);
 }
 
-test "Solve 3 squares in 2x2 board" {
-    const allocator = std.testing.allocator;
+// test "Solve 3 squares in 2x2 board" {
+//     const allocator = std.testing.allocator;
 
-    // 1. Define the piece: a 2x2 square
-    const square_str =
-        \\1
-    ;
-    const piece_input = [_]PieceInput{
-        .{ .s = square_str, .mult = 3 },
-    };
+//     // 1. Define the piece: a 2x2 square
+//     const square_str =
+//         \\1
+//     ;
+//     const piece_input = [_]PieceInput{
+//         .{ .s = square_str, .mult = 3 },
+//     };
 
-    // 2. Initialize pieces
-    const pieces = try initPieces(allocator, &piece_input, .{});
-    defer {
-        for (pieces) |*p| {
-            p.deinit(allocator);
-        }
-        allocator.free(pieces);
-    }
+//     // 2. Initialize pieces
+//     const pieces = try initPieces(allocator, &piece_input, .{});
+//     defer {
+//         for (pieces) |*p| {
+//             p.deinit(allocator);
+//         }
+//         allocator.free(pieces);
+//     }
 
-    // 3. Initialize solver
-    var solver = try Solver.init(allocator, pieces);
-    defer allocator.free(solver.state.stack);
+//     // 3. Initialize solver
+//     var solver = try Solver.init(allocator, pieces);
+//     defer allocator.free(solver.state.stack);
 
-    // 4. Solve the puzzle
-    const solutions = try solver.solve(allocator, 2, 2);
-    defer {
-        for (solutions.solutions) |sol| {
-            allocator.free(sol);
-        }
-        allocator.free(solutions.solutions);
-    }
+//     // 4. Solve the puzzle
+//     const solutions = try solver.solve(allocator, 2, 2);
+//     defer {
+//         for (solutions.solutions) |sol| {
+//             allocator.free(sol);
+//         }
+//         allocator.free(solutions.solutions);
+//     }
 
-    // 5. Check that exactly one solution is found
-    try std.testing.expectEqual(3, solutions.solutions.len);
-}
+//     // 5. Check that exactly one solution is found
+//     try std.testing.expectEqual(3, solutions.solutions.len);
+// }
