@@ -398,14 +398,14 @@ test "Solve 4 squares in 4x4 board" {
     // 4. Solve the puzzle
     const solutions = try solver.solve(allocator, 4, 4);
     defer {
-        for (solutions) |sol| {
+        for (solutions.solutions) |sol| {
             allocator.free(sol);
         }
-        allocator.free(solutions);
+        allocator.free(solutions.solutions);
     }
 
     // 5. Check that exactly one solution is found
-    try std.testing.expectEqual(1, solutions.len);
+    try std.testing.expectEqual(1, solutions.solutions.len);
 }
 
 test "Solve 3 squares in 4x4 board" {
@@ -436,14 +436,14 @@ test "Solve 3 squares in 4x4 board" {
     // 4. Solve the puzzle
     const solutions = try solver.solve(allocator, 4, 4);
     defer {
-        for (solutions) |sol| {
+        for (solutions.solutions) |sol| {
             allocator.free(sol);
         }
-        allocator.free(solutions);
+        allocator.free(solutions.solutions);
     }
 
     // 5. Check that exactly one solution is found
-    try std.testing.expectEqual(8, solutions.len);
+    try std.testing.expectEqual(8, solutions.solutions.len);
 }
 
 test "Solve 3 squares in 2x2 board" {
@@ -473,12 +473,12 @@ test "Solve 3 squares in 2x2 board" {
     // 4. Solve the puzzle
     const solutions = try solver.solve(allocator, 2, 2);
     defer {
-        for (solutions) |sol| {
+        for (solutions.solutions) |sol| {
             allocator.free(sol);
         }
-        allocator.free(solutions);
+        allocator.free(solutions.solutions);
     }
 
     // 5. Check that exactly one solution is found
-    try std.testing.expectEqual(3, solutions.len);
+    try std.testing.expectEqual(3, solutions.solutions.len);
 }
