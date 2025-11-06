@@ -1,7 +1,9 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const b = @import("board.zig");
-const bf = @import("bitfield.zig");
+// const b = @import("board.zig");
+// const bf = @import("bitfield.zig");
+const b = @import("aligned_board.zig");
+const bf = @import("aligned_bitfield.zig");
 
 const SolverError = error{
     MultiplicityZero,
