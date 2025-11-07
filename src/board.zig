@@ -71,7 +71,7 @@ pub const Board = struct {
         };
     }
 
-    pub fn initFromString(allocator: std.mem.Allocator, s: []const u8, config: bf.FromStringConfig) !Board {
+    pub fn initFromString(allocator: std.mem.Allocator, s: []const u8, config: bf.Bitfield.FromStringConfig) !Board {
         const current = try bf.Bitfield.initFromString(allocator, s, config);
         const buf = try allocator.alloc(ChangeElement, current.data.len);
         return Board{
@@ -199,7 +199,7 @@ pub const Board = struct {
     pub fn remove(self: *Board, piece: *const Piece, x: usize, y: usize) BoardErr!void {
         const Local = struct {
             pub fn check(eSelf: Elem, ePiece: Elem) ?BoardErr {
-                if (eSelf ^ ePiece > 0) {
+                if ((eSelf & ePiece) ^ ePiece > 0) {
                     return BoardErr.RemoveMismatch;
                 }
                 return null;
@@ -212,6 +212,48 @@ pub const Board = struct {
         return iterateCheckAndApply(self, piece, x, y, BoardErr, Local.check, Local.action, null);
     }
 };
+
+test "Remove piece full board" {
+    const s =
+        \\010
+        \\111
+    ;
+
+    const board_s =
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+    ;
+
+    const exp =
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111011111
+        \\1110001111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+        \\1111111111
+    ;
+    const allocator = std.testing.allocator;
+    var piece = try Piece.initFromString(allocator, s, .{});
+    defer piece.deinit(allocator);
+    var board = try Board.initFromString(allocator, board_s, .{});
+    defer board.deinit(allocator);
+    try board.remove(&piece, 3, 3);
+    const actual = try std.fmt.allocPrint(allocator, "{f}", .{board.current});
+    defer allocator.free(actual);
+    try std.testing.expectEqualStrings(exp, actual);
+}
 
 test "Insert+remove piece no collision" {
     const s =
