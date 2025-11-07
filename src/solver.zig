@@ -45,6 +45,10 @@ pub const PieceInstance = struct {
     /// The number of pieces to use
     mult: usize,
 
+    pub fn missingArea(self: *const PieceInstance, already_placed: usize) usize {
+        return (self.mult - already_placed) * self.p[0].area;
+    }
+
     pub fn deinit(self: *PieceInstance, allocator: std.mem.Allocator) void {
         for (self.p) |*pp| {
             pp.deinit(allocator);
@@ -241,6 +245,10 @@ pub const Solver = struct {
         }
     };
 
+    fn board_remaining_area(x: usize, y: usize, width: usize, height: usize) usize {
+        return (height - y - 1) * width + (width - x);
+    }
+
     pub fn solve(self: *Solver, allocator: std.mem.Allocator, board_width: usize, board_height: usize) !SolveResult {
         var board = try b.Board.init(allocator, board_width, board_height);
         defer board.deinit(allocator);
@@ -257,6 +265,9 @@ pub const Solver = struct {
             n_iterations += 1;
             switch (machine_state) {
                 SolverStates.try_placement => {
+                    // if (board_remaining_area(self.state.next_x, self.state.next_y, board.width, board.height) < self.pieces[self.state.next_index].missingArea(self.state.n_type_placed)) {
+                    //     machine_state = SolverStates.backtrack;
+                    // } else {
                     const result = board.insert(self.nextPiece(), self.state.next_x, self.state.next_y, &self.state.next_maybe_ok_shift);
                     n_insert_tried += 1;
                     if (result) |_| {
@@ -275,6 +286,7 @@ pub const Solver = struct {
                             },
                         }
                     }
+                    // }
                 },
                 SolverStates.accept_piece => {
                     self.acceptPiece();
