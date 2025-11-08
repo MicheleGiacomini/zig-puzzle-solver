@@ -192,7 +192,6 @@ pub const Board = struct {
                         }
                         n.* = s;
                     }
-
                     while (i > 0) : (i -= 1) {
                         self.current[board_slice_start + i - 1] = action(self.current[board_slice_start + i - 1], piece.store.data[i - 1] >> @intCast(piece_shift));
                     }
