@@ -180,25 +180,60 @@ pub const Board = struct {
                 const check_result = c(board_elem, piece_elem);
                 if (check_result) |e| {
                     if (next_check_maybe_ok) |n| {
-                        const piece_right_edge = piece_shift + piece.width;
-                        const last = column_index == self.bit_field.row_size;
-                        const rightmost_position = if (last) self.bit_field.last_line_elem_len else elem_bit_width;
-                        const max_shift_test = rightmost_position - piece_right_edge;
-                        var s: usize = 1;
-                        shift_while: while (s < max_shift_test) : (s += 1) {
-                            _ = c(board_elem, piece_elem >> @intCast(s)) orelse {
-                                break :shift_while;
-                            } catch continue;
-                        }
-                        n.* = s;
+                        self.find_next_maybe_ok(
+                            err,
+                            c,
+                            board_elem,
+                            column_index,
+                            piece_shift,
+                            piece.width,
+                            piece_elem,
+                            n,
+                        );
                     }
-                    while (i > 0) : (i -= 1) {
-                        self.current[board_slice_start + i - 1] = action(self.current[board_slice_start + i - 1], piece.store.data[i - 1] >> @intCast(piece_shift));
-                    }
+                    self.reset(action, i, board_slice_start, piece, piece_shift);
                     return e;
                 }
                 self.current[board_slice_start + i] = action(board_elem, piece_elem);
             }
+        }
+    }
+
+    fn find_next_maybe_ok(
+        self: *const Board,
+        comptime err: type,
+        comptime c: *const fn (u64, u64) ?err,
+        board_elem: Elem,
+        column_index: usize,
+        piece_shift: usize,
+        piece_width: usize,
+        piece_elem: Elem,
+        n: *usize,
+    ) void {
+        const piece_right_edge = piece_shift + piece_width;
+        const last = column_index == self.bit_field.row_size;
+        const rightmost_position = if (last) self.bit_field.last_line_elem_len else elem_bit_width;
+        const max_shift_test = rightmost_position - piece_right_edge;
+        var s: usize = 1;
+        shift_while: while (s < max_shift_test) : (s += 1) {
+            _ = c(board_elem, piece_elem >> @intCast(s)) orelse {
+                break :shift_while;
+            } catch continue;
+        }
+        n.* = s;
+    }
+
+    fn reset(
+        self: *Board,
+        comptime action: *const fn (u64, u64) u64,
+        i_start: usize,
+        board_slice_start: usize,
+        piece: *const Piece,
+        piece_shift: usize,
+    ) void {
+        var i = i_start;
+        while (i > 0) : (i -= 1) {
+            self.current[board_slice_start + i - 1] = action(self.current[board_slice_start + i - 1], piece.store.data[i - 1] >> @intCast(piece_shift));
         }
     }
 
