@@ -6,6 +6,8 @@ const assert = std.debug.assert;
 // const bf = @import("aligned_bitfield.zig");
 const b = @import("vector_board.zig");
 const bf = @import("aligned_bitfield.zig");
+// const b = @import("vector_simd_board.zig");
+// const bf = @import("aligned_bitfield.zig");
 
 const SolverError = error{
     MultiplicityZero,
@@ -427,7 +429,6 @@ test "Solve 4 squares in 4x4 board" {
 test "Solve 3 squares in 4x4 board" {
     const allocator = std.testing.allocator;
 
-    // 1. Define the piece: a 2x2 square
     const square_str =
         \\11
         \\11
@@ -436,7 +437,6 @@ test "Solve 3 squares in 4x4 board" {
         .{ .s = square_str, .mult = 3 },
     };
 
-    // 2. Initialize pieces
     const pieces = try initPieces(allocator, &piece_input, .{});
     defer {
         for (pieces) |*p| {
@@ -445,11 +445,9 @@ test "Solve 3 squares in 4x4 board" {
         allocator.free(pieces);
     }
 
-    // 3. Initialize solver
     var solver = try Solver.init(allocator, pieces);
     defer allocator.free(solver.state.stack);
 
-    // 4. Solve the puzzle
     const solutions = try solver.solve(allocator, 4, 4);
     defer {
         for (solutions.solutions) |sol| {
@@ -458,7 +456,6 @@ test "Solve 3 squares in 4x4 board" {
         allocator.free(solutions.solutions);
     }
 
-    // 5. Check that exactly one solution is found
     try std.testing.expectEqual(8, solutions.solutions.len);
 }
 
