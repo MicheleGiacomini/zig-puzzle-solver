@@ -163,25 +163,25 @@ pub const Board = struct {
         piece: *const Piece,
         x: usize,
         y: usize,
-        comptime err: type,
-        comptime check: ?*const fn (u64, u64) ?err,
+        comptime Err: type,
+        comptime err: Err,
+        comptime check: ?*const fn (u64, u64) bool,
         comptime action: *const fn (u64, u64) u64,
         next_check_maybe_ok: ?*usize,
-    ) err!void {
+    ) Err!void {
         const column_index = @divTrunc(x, elem_bit_width);
         const piece_shift = @mod(x, elem_bit_width);
         const row_index = y;
         const board_slice_start = column_index * self.height + row_index;
         var i: usize = 0;
         while (i < piece.height) : (i += 1) {
+            const board_elem = self.current[board_slice_start + i];
+            const piece_elem = piece.store.data[i] >> @intCast(piece_shift);
             if (check) |c| {
-                const board_elem = self.current[board_slice_start + i];
-                const piece_elem = piece.store.data[i] >> @intCast(piece_shift);
                 const check_result = c(board_elem, piece_elem);
-                if (check_result) |e| {
+                if (check_result) {
                     if (next_check_maybe_ok) |n| {
                         self.find_next_maybe_ok(
-                            err,
                             c,
                             board_elem,
                             column_index,
@@ -192,17 +192,16 @@ pub const Board = struct {
                         );
                     }
                     self.reset(action, i, board_slice_start, piece, piece_shift);
-                    return e;
+                    return err;
                 }
-                self.current[board_slice_start + i] = action(board_elem, piece_elem);
             }
+            self.current[board_slice_start + i] = action(board_elem, piece_elem);
         }
     }
 
     fn find_next_maybe_ok(
         self: *const Board,
-        comptime err: type,
-        comptime c: *const fn (u64, u64) ?err,
+        comptime c: *const fn (u64, u64) bool,
         board_elem: Elem,
         column_index: usize,
         piece_shift: usize,
@@ -216,9 +215,9 @@ pub const Board = struct {
         const max_shift_test = rightmost_position - piece_right_edge;
         var s: usize = 1;
         shift_while: while (s < max_shift_test) : (s += 1) {
-            _ = c(board_elem, piece_elem >> @intCast(s)) orelse {
+            if (c(board_elem, piece_elem >> @intCast(s))) {} else {
                 break :shift_while;
-            } catch continue;
+            }
         }
         n.* = s;
     }
@@ -285,11 +284,12 @@ pub const Board = struct {
         piece: *const Piece,
         x: usize,
         y: usize,
-        comptime err: type,
-        comptime check: ?*const fn (Elem, Elem) ?err,
+        comptime Err: type,
+        comptime err: Err,
+        comptime check: ?*const fn (Elem, Elem) bool,
         comptime action: *const fn (Elem, Elem) Elem,
         next_check_maybe_ok: ?*usize,
-    ) err!void {
+    ) Err!void {
         const width_overflow = self.width < x + piece.width;
         const height_overflow = self.height < y + piece.height;
 
@@ -304,9 +304,10 @@ pub const Board = struct {
         }
 
         if (@mod(x, elem_bit_width) + piece.width > elem_bit_width) {
-            return iterateCheckAndApplyOverlapping(self, piece, x, y, err, check, action, next_check_maybe_ok);
+            // return iterateCheckAndApplyOverlapping(self, piece, x, y, err, check, action, next_check_maybe_ok);
+            @panic("unimplemented");
         } else {
-            return iterateCheckAndApplyNonOverlapping(self, piece, x, y, err, check, action, next_check_maybe_ok);
+            return iterateCheckAndApplyNonOverlapping(self, piece, x, y, Err, err, check, action, next_check_maybe_ok);
         }
     }
 
@@ -317,18 +318,15 @@ pub const Board = struct {
     /// Takes a smaller bitfield and inserts it at offset in self. Returns an error if self & other has any "on" bit.
     pub fn insert(self: *Board, piece: *const Piece, x: usize, y: usize, next_check_maybe_ok: ?*usize) BoardErr!void {
         const Local = struct {
-            pub fn check(eSelf: Elem, ePiece: Elem) ?BoardErr {
-                if (eSelf & ePiece > 0) {
-                    return BoardErr.InsertCollision;
-                }
-                return null;
+            pub fn check(eSelf: Elem, ePiece: Elem) bool {
+                return eSelf & ePiece > 0;
             }
             pub fn action(eSelf: Elem, ePiece: Elem) Elem {
                 return eSelf ^ ePiece;
             }
         };
 
-        return iterateCheckAndApply(self, piece, x, y, BoardErr, Local.check, Local.action, next_check_maybe_ok);
+        return iterateCheckAndApply(self, piece, x, y, BoardErr, BoardErr.InsertCollision, Local.check, Local.action, next_check_maybe_ok);
     }
 
     pub fn remove(self: *Board, piece: *const Piece, x: usize, y: usize) BoardErr!void {
@@ -344,7 +342,7 @@ pub const Board = struct {
             }
         };
 
-        return iterateCheckAndApply(self, piece, x, y, BoardErr, Local.check, Local.action, null);
+        return iterateCheckAndApply(self, piece, x, y, BoardErr, BoardErr.RemoveMismatch, null, Local.action, null);
     }
 };
 
